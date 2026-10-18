@@ -1,397 +1,231 @@
-From 8139f21313ea3804455c9ace7376218fb3b43f1c Mon Sep 17 00:00:00 2001
-From: Daniil Khripunov <daniil.lednik000@mail.ru>
-Date: Sat, 17 Oct 2026 03:07:19 +0900
-Subject: [PATCH] docs: rewrite README in English, rename repo references to
- JobRadar
+# JobRadar
 
----
- README.md                      | 294 +++++++++++++++------------------
- frontend/src/api/config.ts     |   2 +-
- src/JobRadar.Worker/Program.cs |   2 +-
- 3 files changed, 131 insertions(+), 167 deletions(-)
+[![CI](https://github.com/GomenAmonai/JobRadar/actions/workflows/ci.yml/badge.svg)](https://github.com/GomenAmonai/JobRadar/actions/workflows/ci.yml)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![Kafka](https://img.shields.io/badge/Kafka-KRaft-231F20?logo=apachekafka&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)
 
-diff --git a/README.md b/README.md
-index 760115b..8547d83 100644
---- a/README.md
-+++ b/README.md
-@@ -1,226 +1,190 @@
- # JobRadar
- 
--[![CI](https://github.com/GomenAmonai/JobFinder/actions/workflows/ci.yml/badge.svg)](https://github.com/GomenAmonai/JobFinder/actions/workflows/ci.yml)
-+[![CI](https://github.com/GomenAmonai/JobRadar/actions/workflows/ci.yml/badge.svg)](https://github.com/GomenAmonai/JobRadar/actions/workflows/ci.yml)
- ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
- ![Kafka](https://img.shields.io/badge/Kafka-KRaft-231F20?logo=apachekafka&logoColor=white)
- ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
- ![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)
- 
--Агрегатор remote-вакансий для .NET / backend-разработчиков **+** трекер откликов
--кандидата **+** кабинет работодателя, с обновлениями в реальном времени.
--Коллекторы → Kafka → идемпотентный .NET-воркер → PostgreSQL → REST + SignalR → React.
-+A remote job board for .NET and backend developers, with an application tracker for
-+candidates and a dashboard for employers. Vacancies are pulled from public job boards,
-+pushed through Kafka, stored in PostgreSQL, and streamed to the browser over SignalR.
- 
--**[Live demo](https://job-finder-eight-cyan.vercel.app)**: работает без бэкенда, API
--эмулируется прямо в браузере. Вход демо-кандидатом или демо-работодателем в один клик.
--Полный стек поднимается локально через `docker compose up` ([Запуск](#запуск)).
-+**[Live demo](https://job-finder-eight-cyan.vercel.app)** runs without a backend: the API
-+is emulated in the browser. One click signs you in as a demo candidate or employer.
-+To run the real stack locally, see [Running locally](#running-locally).
- 
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/feed-dark.png">
--  <img alt="JobRadar: лента вакансий с фильтрами и live-уведомлением о новой вакансии" src="docs/screenshots/feed-light.png">
-+  <img alt="JobRadar vacancy feed with filters and a live notification about a new vacancy" src="docs/screenshots/feed-light.png">
- </picture>
- 
--### На что посмотреть
-+## Highlights
- 
--- **Идемпотентный приём под конкуренцией.** 50 параллельных писателей дают 1 строку и
--  ровно 1 INSERT: update-first upsert + уникальный индекс + повтор на `23505`
--  ([тест](tests/JobRadar.IntegrationTests/VacancyUpsertConcurrencyTests.cs)).
--- **Event-driven, разные процессы.** Worker и API связаны только через Kafka
--  (`vacancies.changed`), live-лента доходит до браузера по SignalR, битые сообщения
--  уходят в dead-letter топик.
--- **Безопасность.** Ротация refresh-токенов с инвалидацией всей цепочки при reuse
--  (RFC 9700), скоупинг по пользователю (нет IDOR), rate limiting, проверка по
--  OWASP API Security Top 10.
--- **Optimistic concurrency** на системном столбце `xmin`: устаревшая версия даёт `409`,
--  а не тихую перезапись.
--- **79 тестов в CI:** 27 unit + 52 integration на реальном PostgreSQL (Testcontainers).
-+- **Idempotent ingestion under concurrency.** The same vacancy can arrive several times
-+  at once. A unique index on `(Source, ExternalId)` plus an update-first upsert with a
-+  retry on Postgres `23505` guarantees one row. The
-+  [test](tests/JobRadar.IntegrationTests/VacancyUpsertConcurrencyTests.cs) runs 50
-+  concurrent writers and checks for exactly one row and one insert.
-+- **Separate processes connected by Kafka.** The worker and the API share nothing but
-+  the `vacancies.changed` topic. Messages that fail processing go to a dead-letter topic.
-+- **Auth done carefully.** Refresh-token rotation that revokes the whole token chain on
-+  reuse (RFC 9700), per-user scoping on every endpoint (no IDOR), rate limiting.
-+- **Optimistic concurrency** on Postgres `xmin`: a stale update returns `409` instead of
-+  silently overwriting.
-+- **79 tests in CI:** 27 unit tests and 52 integration tests against real PostgreSQL
-+  (Testcontainers).
- 
--**Стек:** .NET 10 · ASP.NET Core (Minimal API + SignalR) · EF Core 10 + PostgreSQL ·
--Kafka (Confluent.Kafka, KRaft) · OpenTelemetry · Clean Architecture · React + Vite +
--TypeScript + TanStack Query · Docker Compose · xUnit + Testcontainers · GitHub Actions.
-+## Roles
- 
-----
-+- **Guest:** public feed with filters (market, level, stack, text search) and live updates.
-+- **Candidate:** account, saved filters, applications, a personal pipeline with status
-+  transitions, notifications when a new vacancy matches a saved filter.
-+- **Employer:** posts vacancies directly on JobRadar, sees incoming applications, moves
-+  them through stages. The candidate gets a live notification on every change.
- 
--## Что это
-+Aggregated vacancies live on other sites, so applying to one only adds it to the
-+candidate's own tracker. Applications to vacancies posted on JobRadar reach the employer.
- 
--Коллекторы на разных языках складывают сырьё в Kafka → .NET-воркер идемпотентно
--нормализует и сохраняет его в Postgres → REST API отдаёт вакансии с фильтрами →
--новые/изменённые вакансии и изменения статусов прилетают в SPA по SignalR.
--
--Три роли в одном продукте:
--
--- **Гость** — публичная лента вакансий с фильтрами (рынок/грейд/стек/поиск), live-обновления.
--- **Кандидат** — JWT-аккаунт, сохранённые фильтры, отклик на вакансию, личный
--  пайплайн откликов (state-machine статусов), live-уведомления о матчах.
--- **Работодатель** — постит нативные вакансии на JobRadar, видит входящие отклики
--  (с контактами кандидатов), двигает их по стадиям — кандидат получает push.
--
--> Вакансии агрегируются с внешних бордов, поэтому «настоящий отклик» имеет смысл
--> только для нативных (запощенных работодателем) вакансий. По агрегированным отклик —
--> это личный трекер кандидата. Это «гибрид»: трекер + посредник в одной модели.
--
--## Showpiece: идемпотентный приём под конкуренцией
--
--Одна и та же вакансия приходит повторно и одновременно из нескольких источников/потребителей.
--Гарантия — **ровно одна строка** на `(Source, ExternalId)`, без дублей и без потери апдейтов:
--
--- Уникальный индекс `(Source, ExternalId)` физически запрещает дубль.
--- [`VacancyUpsertService`](src/JobRadar.Infrastructure/Ingestion/VacancyUpsertService.cs)
--  использует стратегию **update-first**: атомарный set-based `ExecuteUpdate`
--  (не читает строку, не штормит ретраями под нагрузкой), а на гонке вставки ловит
--  нарушение уникального индекса (Postgres `23505`) и повторяет цикл.
--- Optimistic concurrency через системный столбец `xmin` задействован там, где он уместен —
--  на интерактивных правках (сохранённые фильтры, смена статуса отклика): устаревшая
--  клиентская версия даёт `409`, а не тихую перезапись.
--
--Проверяется тестом [`VacancyUpsertConcurrencyTests`](tests/JobRadar.IntegrationTests/VacancyUpsertConcurrencyTests.cs):
--**50 конкурентных писателей → 1 строка, ровно 1 INSERT.**
--
--## Архитектура
-+## Architecture
- 
- ```
--[ Коллекторы ]            [ Kafka ]                  [ .NET ]                     [ Клиент ]
-- RemotiveCollector ─push─► vacancies.raw ──► Worker: VacancyConsumer
-- RemoteOkCollector                          ├─ нормализация (рынок/грейд/стек,
-- (+ Python-скрейперы)                       │   парсинг зарплат, dedup-ключ)
--                                            ├─ идемпотентный upsert ──────► Postgres
--                                            ├─ ошибки ──► vacancies.dead-letter
--                                            └─ publish ─► vacancies.changed
--                                                               │
--                                          Api: VacancyChangedConsumer ◄┘
--                                            └─ IHubContext ─► SignalR ─► React (live)
--                                          Api: REST (/vacancies, /auth, /me, /employer)
--                                            └─────────────────────────────► React SPA
-+ Collectors            Kafka                 Worker (.NET)                   Client
-+ Remotive    ──push──► vacancies.raw ──────► VacancyConsumer
-+ RemoteOK                                    ├─ normalize (market, level, stack,
-+                                             │  salary parsing, dedup key)
-+                                             ├─ idempotent upsert ─────────► PostgreSQL
-+                                             ├─ failures ──► vacancies.dead-letter
-+                                             └─ publish ───► vacancies.changed
-+                                                                   │
-+                                             API: VacancyChangedConsumer ◄─┘
-+                                             └─ SignalR hub ───────────────► React (live)
-+                                             API: REST ────────────────────► React
- ```
- 
--Worker и Api — **разные процессы**, поэтому live-обновления идут через Kafka-бэкплейн
--(`vacancies.changed`), а не in-process: воркер не знает о SignalR, API не знает о приёме.
-+The worker knows nothing about SignalR and the API knows nothing about ingestion,
-+so live updates go through Kafka rather than in-process events.
- 
--**Слои (Clean Architecture, зависимости внутрь):**
-+Projects follow Clean Architecture, with dependencies pointing inward:
- 
--- `JobRadar.Domain` — сущности (`Vacancy`, `User`, `JobApplication`, `SavedFilter`, …)
--  и чистая доменная логика (`ApplicationStatusTransitions` — state-machine статусов).
--- `JobRadar.Application` — контракты, DTO, интерфейсы, нормализация
--  (`VacancyNormalization`, `SalaryParser`, `DedupKeyBuilder`).
--- `JobRadar.Infrastructure` — EF Core, миграции, сервисы (upsert, auth, фильтры, отклики, employer).
--- `JobRadar.Api` — Minimal API + SignalR-хаб + OpenAPI/Scalar + JWT + rate limiting + OpenTelemetry.
--- `JobRadar.Worker` — Kafka consumer + C#-коллекторы (BackgroundService, Polly).
--- `frontend/` — React + Vite + TS SPA (TanStack Query + `@microsoft/signalr`).
-+| Project | Contents |
-+|---|---|
-+| `JobRadar.Domain` | Entities and pure domain logic, e.g. the application status state machine |
-+| `JobRadar.Application` | Contracts, DTOs, normalization, salary parsing, dedup keys |
-+| `JobRadar.Infrastructure` | EF Core, migrations, upsert, auth, filters, applications |
-+| `JobRadar.Api` | Minimal API, SignalR hub, JWT, rate limiting, OpenTelemetry, Scalar |
-+| `JobRadar.Worker` | Kafka consumer and collectors (BackgroundService + Polly) |
-+| `frontend/` | React, Vite, TypeScript, TanStack Query, `@microsoft/signalr` |
- 
- ## API
- 
--Полный интерактивный справочник — Scalar UI на `GET /scalar/v1` (в Development).
-+Interactive reference: Scalar UI at `/scalar/v1` (Development only).
- 
--| Метод | Маршрут | Доступ |
-+| Method | Route | Access |
- |---|---|---|
--| `GET` | `/vacancies?market=&level=&stack=&q=&page=&pageSize=` | публично |
--| `POST` | `/auth/register` · `/auth/login` · `/auth/refresh` | публично (rate-limited) |
--| `GET` | `/auth/me` | auth |
--| `GET/POST/PUT/DELETE` | `/me/filters[/{id}]` | auth |
--| `POST` | `/vacancies/{id}/applications` | auth |
--| `GET/PATCH/DELETE` | `/me/applications[/{id}][/status]` | auth |
--| `POST` | `/employer/vacancies` | роль `Employer` |
--| `GET` | `/employer/applications` | роль `Employer` |
--| `PATCH` | `/employer/applications/{id}/status` | роль `Employer` |
--| `GET` | `/hubs/vacancies` | SignalR (токен в `?access_token=`) |
--
--**SignalR-события (сервер → клиент):** `VacancyChanged` (всем — live-лента),
--`MatchedVacancy` (таргетированно — новая вакансия под сохранённым фильтром),
--`ApplicationStatusChanged` (таргетированно — работодатель сменил статус отклика).
--
--## Безопасность и прод-готовность
--
--- **JWT** (HS256): валидация issuer/audience/lifetime/подписи; refresh-токены опаковые,
--  в БД только SHA-256 хеш, ротация с **инвалидацией всей цепочки при reuse** (RFC 9700).
--- **Авторизация:** эндпоинты скоупятся по пользователю (нет BOLA/IDOR); `/employer/*`
--  под `RequireRole("Employer")` — покрыто HTTP-тестами (anon 401 / candidate 403 / employer 200).
--- **Хардening (вне Development):** `UseExceptionHandler` + ProblemDetails (без stack-trace),
--  HSTS + HTTPS-redirect, fail-fast на дев/слабом JWT-ключе, security-заголовки
--  (nosniff/frame-options/referrer), CORS origins из конфигурации.
--- **Rate limiting:** `/auth/*` 10/мин/IP, `/vacancies` 120/мин/IP.
--- **Защита от DoS:** LIKE-экранирование + лимит длины поиска, пагинация ≤ 100, лимит длины пароля.
--- **Надёжность приёма:** at-least-once Kafka + идемпотентный upsert; необработанные
--  сообщения уходят в **dead-letter** топик, а не теряются.
--- **Наблюдаемость:** OpenTelemetry (traces + metrics: ASP.NET / HttpClient / Npgsql / runtime),
--  экспорт по OTLP при заданном `OTEL_EXPORTER_OTLP_ENDPOINT`.
--
--Прошло state security-аудит по OWASP API Security Top 10 (BOLA, broken auth, BOPLA,
-+| `GET` | `/vacancies?market=&level=&stack=&q=&page=&pageSize=` | public |
-+| `POST` | `/auth/register`, `/auth/login`, `/auth/refresh` | public, rate-limited |
-+| `GET` | `/auth/me` | signed in |
-+| `GET/POST/PUT/DELETE` | `/me/filters[/{id}]` | signed in |
-+| `POST` | `/vacancies/{id}/applications` | signed in |
-+| `GET/PATCH/DELETE` | `/me/applications[/{id}][/status]` | signed in |
-+| `POST` | `/employer/vacancies` | `Employer` role |
-+| `GET` | `/employer/applications` | `Employer` role |
-+| `PATCH` | `/employer/applications/{id}/status` | `Employer` role |
-+| `GET` | `/hubs/vacancies` | SignalR, token in `?access_token=` |
-+
-+SignalR events: `VacancyChanged` (broadcast), `MatchedVacancy` (to the user whose saved
-+filter matched), `ApplicationStatusChanged` (to the candidate).
-+
-+## Security and reliability
-+
-+- **JWT** (HS256) with issuer, audience, lifetime and signature validation. Refresh
-+  tokens are opaque; only their SHA-256 hash is stored.
-+- **Authorization:** queries are scoped to the current user; `/employer/*` requires the
-+  `Employer` role. HTTP tests cover anonymous (401), candidate (403) and employer (200).
-+- **Outside Development:** ProblemDetails without stack traces, HSTS and HTTPS redirect,
-+  startup fails on a weak or dev JWT key, security headers, CORS origins from config.
-+- **Rate limits:** `/auth/*` 10 requests/min per IP, `/vacancies` 120 requests/min per IP.
-+- **Input limits:** escaped `LIKE` search with a length cap, page size ≤ 100, password
-+  length cap.
-+- **Delivery:** at-least-once Kafka consumption plus idempotent upsert; failed messages
-+  are kept in the dead-letter topic.
-+- **Observability:** OpenTelemetry traces and metrics (ASP.NET Core, HttpClient, Npgsql,
-+  runtime), exported over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
-+
-+I went through the OWASP API Security Top 10 as a checklist (BOLA, broken auth, BOPLA,
- resource consumption, function-level authz, SSRF, misconfiguration).
- 
--## Запуск
-+## Running locally
- 
--Требуется Docker и .NET 10 SDK (репозиторий пинит версию через `global.json`).
-+Requires Docker and the .NET 10 SDK (pinned in `global.json`).
- 
- ```bash
--# 1. Инфраструктура: Postgres (host-порт 5433) + Kafka (+ kafka-ui на :8080)
-+# 1. Infrastructure: Postgres (host port 5433), Kafka, kafka-ui on :8080
- docker compose up -d
- 
--# 2. Применить миграции
-+# 2. Apply migrations
- dotnet ef database update -p src/JobRadar.Infrastructure -s src/JobRadar.Api
- 
--# 3. Воркер: коллекторы → Kafka → Postgres → vacancies.changed
-+# 3. Worker: collectors → Kafka → Postgres → vacancies.changed
- dotnet run --project src/JobRadar.Worker
- 
--# 4. API (REST + SignalR; Scalar UI на /scalar/v1) — на http://localhost:5088
-+# 4. API (REST + SignalR) on http://localhost:5088
- dotnet run --project src/JobRadar.Api
- 
--# 5. Фронт — на http://localhost:5173
-+# 5. Frontend on http://localhost:5173
- cd frontend && npm install && npm run dev
- ```
- 
--Фронт ходит в API по `VITE_API_URL` (по умолчанию `http://localhost:5088`) — см. `frontend/env.example`.
-+The frontend reads the API address from `VITE_API_URL` (default
-+`http://localhost:5088`); see `frontend/env.example`.
- 
--> Локальные dev-значения (Postgres-креды, JWT-ключ в `appsettings`) — throwaway, в git
--> только для разработки. Перед реальным деплоем: секреты в env/secret-store, верификация
--> работодателя (сейчас роль self-service — демо), TTL/retention вакансий (требует смены
--> cascade-FK), обработчик/реплей dead-letter.
-+> The Postgres credentials and JWT key in `appsettings` are throwaway dev values.
-+> Before a real deployment: move secrets to env vars or a secret store, add employer
-+> verification (the role is self-service for the demo), add vacancy retention, and
-+> add a dead-letter replay handler.
- 
--## Деплой
-+## Deployment
- 
--Контейнеры для всех сервисов готовы: `src/JobRadar.Api/Dockerfile`,
--`src/JobRadar.Worker/Dockerfile`, `frontend/Dockerfile` (multi-stage, .NET 10 / Node).
--API биндится на `$PORT` и опционально накатывает миграции на старте
--(`RunMigrationsOnStartup=true`). Пошаговый план для Railway (5 сервисов, переменные,
--Kafka, порядок) — в [DEPLOY.md](DEPLOY.md).
-+Every service has a multi-stage Dockerfile: `src/JobRadar.Api/Dockerfile`,
-+`src/JobRadar.Worker/Dockerfile`, `frontend/Dockerfile`. The API binds to `$PORT` and can
-+apply migrations on startup (`RunMigrationsOnStartup=true`). A step-by-step Railway
-+setup is in [DEPLOY.md](DEPLOY.md).
- 
--## Тесты
-+## Tests
- 
- ```bash
--dotnet test tests/JobRadar.UnitTests          # быстрые, без Docker (27)
--dotnet test tests/JobRadar.IntegrationTests   # Testcontainers, нужен Docker (52)
-+dotnet test tests/JobRadar.UnitTests          # fast, no Docker (27)
-+dotnet test tests/JobRadar.IntegrationTests   # Testcontainers, needs Docker (52)
- ```
- 
--Оба набора и сборка фронта (`tsc` + `vite build`) гоняются в GitHub Actions на каждый
--push и PR: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-+Both suites and the frontend build (`tsc` + `vite build`) run in
-+[GitHub Actions](.github/workflows/ci.yml) on every push and pull request.
- 
--- **Unit (27):** чистая доменная/прикладная логика — нормализация, парсинг зарплат,
--  dedup-ключ, релевантность, state-machine статусов, маппинг.
--- **Integration (52):** реальный Postgres через Testcontainers — идемпотентный upsert
--  под конкуренцией, query/дедуп, auth + ротация refresh, сохранённые фильтры (xmin-конфликт),
--  отклики, employer-сценарии (IDOR-скоупинг), и HTTP-level role-enforcement через
--  `WebApplicationFactory`.
-+- **Unit:** normalization, salary parsing, dedup keys, relevance, status transitions,
-+  mapping.
-+- **Integration:** concurrent upsert, querying and dedup, auth and refresh rotation,
-+  saved filters with `xmin` conflicts, applications, employer flows with IDOR checks,
-+  role enforcement over HTTP via `WebApplicationFactory`.
- 
- ## Frontend
- 
--SPA на React + Vite + TS: публичная лента с фильтрами, авторизация (login/register),
--сохранённые фильтры, отклик + доска статусов, сторона работодателя, live через SignalR.
--Данные — TanStack Query (кэш, инвалидация по SignalR), доступ к API — типизированный
--клиент с авто-refresh токена. Стили на чистом CSS без UI-библиотек: дизайн-токены
--в `frontend/src/styles/tokens.css` (светлая и тёмная схема по настройке ОС), плотная
--таблица вакансий, которая на узких экранах складывается в карточки.
-+React + Vite + TypeScript, plain CSS with no UI library. Design tokens live in
-+`frontend/src/styles/tokens.css` and follow the OS light/dark setting. The vacancy table
-+collapses into cards on narrow screens. Data goes through TanStack Query, and SignalR
-+events invalidate the cache. The typed API client refreshes tokens automatically.
- 
--### Демо-режим
-+### Demo mode
- 
--Чтобы статический деплой фронта не показывал пустой экран без API, есть демо-режим:
--[`frontend/src/api/demo/server.ts`](frontend/src/api/demo/server.ts) отвечает на те же
--маршруты, что и настоящий API (коды ответов, версии для `409`, state-machine откликов,
--роль `Employer`), а состояние хранит в `localStorage`. Симулированный воркер раз в
--~25 секунд «находит» вакансию и шлёт те же события, что SignalR-хаб (`VacancyChanged`,
--`MatchedVacancy`, `ApplicationStatusChanged`). Код компонентов не знает, в каком режиме
--он работает: подменяется только транспорт в `api/http.ts`.
-+[`frontend/src/api/demo/server.ts`](frontend/src/api/demo/server.ts) answers the same
-+routes as the real API (status codes, `409` versions, the status state machine, the
-+`Employer` role) and keeps state in `localStorage`. A simulated worker "finds" a vacancy
-+about every 25 seconds and emits the same events as the SignalR hub. Components don't know
-+which mode they run in; only the transport in `api/http.ts` is swapped.
- 
--| Сборка | Режим |
-+| Build | Mode |
- |---|---|
--| `npm run dev` | реальный API на `VITE_API_URL` (по умолчанию `http://localhost:5088`) |
--| `npm run build` с `VITE_API_URL` | реальный API |
--| `npm run build` без `VITE_API_URL` | демо (так собирается Vercel-деплой) |
--| `VITE_DEMO_MODE=true` / `false` | принудительно включить / выключить |
-+| `npm run dev` | real API at `VITE_API_URL` |
-+| `npm run build` with `VITE_API_URL` | real API |
-+| `npm run build` without `VITE_API_URL` | demo (used for the Vercel deployment) |
-+| `VITE_DEMO_MODE=true` / `false` | force on / off |
-diff --git a/frontend/src/api/config.ts b/frontend/src/api/config.ts
-index 5a6c8c6..80026ec 100644
---- a/frontend/src/api/config.ts
-+++ b/frontend/src/api/config.ts
-@@ -23,4 +23,4 @@ export const VACANCIES_HUB_URL = `${API_BASE_URL}/hubs/vacancies`;
- 
- export const DEMO_MODE = resolveDemoMode();
- 
--export const REPOSITORY_URL = 'https://github.com/GomenAmonai/JobFinder';
-+export const REPOSITORY_URL = 'https://github.com/GomenAmonai/JobRadar';
-diff --git a/src/JobRadar.Worker/Program.cs b/src/JobRadar.Worker/Program.cs
-index c2cddd7..7721b3c 100644
---- a/src/JobRadar.Worker/Program.cs
-+++ b/src/JobRadar.Worker/Program.cs
-@@ -23,7 +23,7 @@ builder.Services.AddHttpClient("remoteok", client =>
-         client.BaseAddress = new Uri("https://remoteok.com/");
-         client.Timeout = TimeSpan.FromSeconds(30);
-         // RemoteOK отдаёт 403 на запросы без User-Agent.
--        client.DefaultRequestHeaders.UserAgent.ParseAdd("JobRadar/1.0 (+https://github.com/GomenAmonai/JobFinder)");
-+        client.DefaultRequestHeaders.UserAgent.ParseAdd("JobRadar/1.0 (+https://github.com/GomenAmonai/JobRadar)");
-     })
-     .AddStandardResilienceHandler();
- 
--- 
-2.43.0
+JobRadar is a real-time remote-job platform for .NET and backend engineers. It combines a vacancy aggregator, a candidate application tracker, and an employer workspace in one product.
+
+Vacancies are collected from public job boards, transported through Kafka, normalized and persisted by a .NET worker, exposed through a REST API, and streamed to the browser with SignalR.
+
+> **Live demo:** [job-finder-eight-cyan.vercel.app](https://job-finder-eight-cyan.vercel.app)
+>
+> The demo runs entirely in the browser with a simulated API, so it does not require the backend stack. Use the controls in the application to sign in as a demo candidate or employer.
+
+![JobRadar vacancy feed with filters and live updates](docs/screenshots/feed-light.png)
+
+## Contents
+
+- [Key capabilities](#key-capabilities)
+- [User roles](#user-roles)
+- [Architecture](#architecture)
+- [Technology](#technology)
+- [API](#api)
+- [Security and reliability](#security-and-reliability)
+- [Running locally](#running-locally)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Frontend](#frontend)
+- [Demo mode](#demo-mode)
+
+## Key capabilities
+
+- **Real-time vacancy feed** with filtering by market, level, stack, and search text.
+- **Idempotent ingestion under concurrency.** A unique `(Source, ExternalId)` key and update-first upsert strategy prevent duplicate vacancies, including during concurrent writes. The integration test exercises 50 concurrent writers and verifies a single stored row and insert.
+- **Event-driven processing.** Collectors publish raw vacancies to Kafka; the worker normalizes and persists them, then publishes change events for the API and frontend.
+- **Candidate application tracking.** Candidates can save filters, track applications, and move applications through a controlled status workflow.
+- **Employer workspace.** Employers can publish native JobRadar vacancies, review incoming applications, and update their status.
+- **Optimistic concurrency.** Interactive updates use PostgreSQL `xmin`; stale writes return `409 Conflict` instead of silently overwriting newer data.
+- **Live notifications.** SignalR delivers vacancy changes, saved-filter matches, and application status updates.
+- **Automated quality checks.** Unit and integration tests run in CI against real PostgreSQL through Testcontainers.
+
+Aggregated vacancies remain hosted on their original job boards. Applying to an aggregated vacancy adds it to the candidate's personal tracker; applications to vacancies posted directly on JobRadar are delivered to the employer.
+
+## User roles
+
+### Guest
+
+- Browse the public vacancy feed.
+- Filter vacancies by market, level, stack, and search text.
+- Receive live feed updates.
+
+### Candidate
+
+- Register and authenticate with a JWT-based account.
+- Save reusable vacancy filters.
+- Add vacancies to a personal application pipeline.
+- Track application status transitions.
+- Receive notifications when a vacancy matches a saved filter or an employer changes an application status.
+
+### Employer
+
+- Publish vacancies directly on JobRadar.
+- Review incoming applications.
+- Move applications through the employer workflow.
+- Notify candidates about status changes in real time.
+
+## Architecture
+
+```text
+Collectors                 Kafka                    Worker (.NET)                 Client
+
+Remotive       ────────►   vacancies.raw   ─────►  VacancyConsumer
+RemoteOK                                              ├─ normalize market, level,
+                                                      │  stack, salary and dedup key
+                                                      ├─ idempotent upsert ───────► PostgreSQL
+                                                      ├─ processing failures ─────► vacancies.dead-letter
+                                                      └─ publish changes ─────────► vacancies.changed
+                                                                                         │
+                                                      API: VacancyChangedConsumer ◄──────┘
+                                                      └─ SignalR hub ─────────────► React
+                                                      API: REST ──────────────────► React SPA
+```
+
+The worker and API run as separate processes. The worker does not depend on SignalR, and the API does not depend on the ingestion implementation. Kafka provides the event-driven boundary between them.
+
+The solution follows Clean Architecture, with dependencies directed inward:
+
+| Project | Responsibility |
+|---|---|
+| `JobRadar.Domain` | Entities and pure domain logic, including application status transitions |
+| `JobRadar.Application` | Contracts, DTOs, normalization, salary parsing, and deduplication keys |
+| `JobRadar.Infrastructure` | EF Core, migrations, persistence, authentication, filters, and applications |
+| `JobRadar.Api` | Minimal API, SignalR, JWT authentication, authorization, rate limiting, OpenTelemetry, and Scalar |
+| `JobRadar.Worker` | Kafka consumers, collectors, background processing, and resilience policies |
+| `frontend/` | React, Vite, TypeScript, TanStack Query, SignalR, and the browser UI |
+
+## Technology
+
+- .NET 10 and ASP.NET Core Minimal APIs
+- Entity Framework Core 10 and PostgreSQL 16
+- Apache Kafka in KRaft mode with Confluent.Kafka
+- SignalR for real-time browser updates
+- React 18, Vite, and TypeScript
+- TanStack Query for client-side data fetching and cache management
+- OpenTelemetry for traces and metrics
+- Docker Compose for local infrastructure
+- xUnit and Testcontainers for automated testing
+- GitHub Actions for continuous integration
+
+## API
+
+The interactive API reference is available at `/scalar/v1` in the Development environment.
+
+| Method | Route | Access |
+|---|---|---|
+| `GET` | `/vacancies?market=&level=&stack=&q=&page=&pageSize=` | Public |
+| `POST` | `/auth/register`, `/auth/login`, `/auth/refresh` | Public; rate-limited |
+| `GET` | `/auth/me` | Authenticated |
+| `GET/POST/PUT/DELETE` | `/me/filters[/{id}]` | Authenticated |
+| `POST` | `/vacancies/{id}/applications` | Authenticated |
+| `GET/PATCH/DELETE` | `/me/applications[/{id}][/status]` | Authenticated |
+| `POST` | `/employer/vacancies` | `Employer` role |
+| `GET` | `/employer/applications` | `Employer` role |
+| `PATCH` | `/employer/applications/{id}/status` | `Employer` role |
+| `GET` | `/hubs/vacancies` | SignalR; token supplied through `?access_token=` |
+
+### SignalR events
+
+- `VacancyChanged` — broadcast when a vacancy is inserted or updated.
+- `MatchedVacancy` — sent to a candidate when a new vacancy matches a saved filter.
+- `ApplicationStatusChanged` — sent to a candidate when an employer changes an application status.
+
+## Security and reliability
+
+- **JWT validation:** issuer, audience, lifetime, and signature validation are enabled for access tokens.
+- **Refresh-token protection:** refresh tokens are opaque; only their SHA-256 hashes are stored. Rotation revokes the token chain when reuse is detected.
+- **Authorization boundaries:** authenticated queries are scoped to the current user, and employer endpoints require the `Employer` role.
+- **Production hardening:** ProblemDetails responses omit stack traces outside Development; HSTS, HTTPS redirection, security headers, and configured CORS are enabled.
+- **Rate limiting:** authentication endpoints are limited to 10 requests per minute per IP; the public vacancy endpoint is limited to 120 requests per minute per IP.
+- **Input protection:** search expressions are escaped and length-limited, page size is capped at 100, and password length is constrained.
+- **Reliable delivery:** Kafka consumption is at least once, while idempotent persistence prevents duplicate vacancies. Messages that cannot be processed are sent to a dead-letter topic.
+- **Observability:** OpenTelemetry captures ASP.NET Core, HTTP client, PostgreSQL, and runtime traces and metrics. OTLP export is enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
+
+The security model was reviewed against relevant areas of the OWASP API Security Top 10, including object-level authorization, broken authentication, property-level authorization, resource consumption, function-level authorization, SSRF, and security misconfiguration.
+
+## Running locally
+
+### Prerequisites
+
+- Docker
+- .NET 10 SDK
+- Node.js and npm
+
+The .NET SDK version is pinned in [`global.json`](global.json).
+
+### Start the stack
+
+```bash
+# 1. Start PostgreSQL, Kafka, and Kafka UI.
+#    PostgreSQL is exposed on host port 5433; Kafka UI is available on :8080.
+docker compose up -d
+
+# 2. Apply database migrations.
+dotnet ef database update \
+  --project src/JobRadar.Infrastructure \
+  --startup-project src/JobRadar.Api
+
+# 3. Start the worker.
+dotnet run --project src/JobRadar.Worker
+
+# 4. Start the API on http://localhost:5088.
+dotnet run --project src/JobRadar.Api
+
+# 5. Start the frontend on http://localhost:5173.
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend reads the API address from `VITE_API_URL` and defaults to `http://localhost:5088`. See [`frontend/env.example`](frontend/env.example) for configuration details.
+
+> **Development configuration:** the PostgreSQL credentials and JWT key in the application settings are intended only for local development. Before deploying to a shared or production environment, move secrets to environment variables or a secret manager, add employer verification, define vacancy retention policies, and provide a dead-letter replay process.
+
+## Deployment
+
+The repository includes multi-stage Dockerfiles for each deployable service:
+
+- `src/JobRadar.Api/Dockerfile`
+- `src/JobRadar.Worker/Dockerfile`
+- `frontend/Dockerfile`
+
+The API supports platform-provided `$PORT` values and can apply migrations at startup when `RunMigrationsOnStartup=true` is enabled. For a Railway deployment walkthrough, see [`DEPLOY.md`](DEPLOY.md).
+
+## Testing
+
+```bash
+# Unit tests: fast and Docker-free.
+dotnet test tests/JobRadar.UnitTests
+
+# Integration tests: require Docker and use Testcontainers.
+dotnet test tests/JobRadar.IntegrationTests
+```
+
+The CI workflow also builds the frontend with TypeScript and Vite on every push and pull request. The test suite covers:
+
+- **Unit behavior:** normalization, salary parsing, deduplication keys, relevance scoring, status transitions, and mapping.
+- **Integration behavior:** concurrent upserts, vacancy querying and deduplication, authentication and refresh-token rotation, saved-filter concurrency conflicts, applications, employer flows, IDOR protection, and HTTP-level role enforcement through `WebApplicationFactory`.
+
+## Frontend
+
+The frontend is a React, Vite, and TypeScript single-page application. It uses plain CSS with design tokens, supports light and dark system themes, and changes the vacancy table into cards on narrow screens.
+
+TanStack Query manages server state and cache invalidation. SignalR events invalidate the active vacancy query, while the typed API client handles token refresh automatically.
+
+For frontend-specific setup, configuration, and project structure, see [`frontend/README.md`](frontend/README.md).
+
+## Demo mode
+
+The static frontend includes a browser-only demo mode so the deployed experience remains usable without a running API. [`frontend/src/api/demo/server.ts`](frontend/src/api/demo/server.ts) mirrors the real API's routes and behavior, including status codes, optimistic-concurrency versions, application status transitions, and the `Employer` role. State is stored in `localStorage`.
+
+A simulated worker discovers a vacancy approximately every 25 seconds and emits the same event types as the SignalR hub. Components use the same interface in both modes; only the transport layer in `frontend/src/api/http.ts` changes.
+
+| Command or setting | Behavior |
+|---|---|
+| `npm run dev` | Use the real API at `VITE_API_URL` |
+| `npm run build` with `VITE_API_URL` | Build against the real API |
+| `npm run build` without `VITE_API_URL` | Build the browser demo used by the Vercel deployment |
+| `VITE_DEMO_MODE=true` | Force demo mode on |
+| `VITE_DEMO_MODE=false` | Force demo mode off |
