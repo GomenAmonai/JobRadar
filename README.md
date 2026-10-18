@@ -10,11 +10,14 @@ JobRadar is a real-time remote-job platform for .NET and backend engineers. It c
 
 Vacancies are collected from public job boards, transported through Kafka, normalized and persisted by a .NET worker, exposed through a REST API, and streamed to the browser with SignalR.
 
+**Value proposition:** one codebase that demonstrates end-to-end backend engineering skills: event-driven ingestion, secure API design, real-time updates, and production-oriented deployment practices.
+
 > **Live demo:** [job-finder-eight-cyan.vercel.app](https://job-finder-eight-cyan.vercel.app)
 >
 > The demo runs entirely in the browser with a simulated API, so it does not require the backend stack. Use the controls in the application to sign in as a demo candidate or employer.
 
 ![JobRadar vacancy feed with filters and live updates](docs/screenshots/feed-light.png)
+![JobRadar vacancy feed in dark theme](docs/screenshots/feed-dark.png)
 
 ## Contents
 
@@ -29,6 +32,8 @@ Vacancies are collected from public job boards, transported through Kafka, norma
 - [Testing](#testing)
 - [Frontend](#frontend)
 - [Demo mode](#demo-mode)
+- [Project status and limitations](#project-status-and-limitations)
+- [Roadmap](#roadmap)
 
 ## Key capabilities
 
@@ -229,3 +234,15 @@ A simulated worker discovers a vacancy approximately every 25 seconds and emits 
 | `npm run build` without `VITE_API_URL` | Build the browser demo used by the Vercel deployment |
 | `VITE_DEMO_MODE=true` | Force demo mode on |
 | `VITE_DEMO_MODE=false` | Force demo mode off |
+
+## Project status and limitations
+
+- **Status:** active portfolio project with CI, automated tests, and containerized deployment assets.
+- **Current limitation:** the public live demo is frontend-only and uses an in-browser simulated API instead of the hosted backend stack.
+- **Current limitation:** aggregated vacancies stay on their original job boards; only vacancies posted directly on JobRadar support native employer-to-candidate workflow inside the platform.
+
+## Roadmap
+
+- Add a production-hosted backend environment for the live demo experience.
+- Improve employer verification and moderation workflows for posted vacancies.
+- Expand observability dashboards and operational runbooks for deployment environments.
